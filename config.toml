@@ -1,0 +1,3 @@
+RemoteFile  = "http://guvm.mvd.ru/upload/expired-passports/list_of_expired_passports.csv.bz2"
+Port        = 9001
+UpdateEvery = 72 #How often to check for updates in Hrs
