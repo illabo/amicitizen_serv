@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"compress/bzip2"
 	"context"
 	"flag"
@@ -246,37 +247,29 @@ func downloadUpdate(from string, db *bolt.DB) (bool, error) {
 	}
 	defer resp.Body.Close()
 
-	reader := bzip2.NewReader(resp.Body)
+	bodyReader := bufio.NewReader(resp.Body)
+	bzipReader := bzip2.NewReader(bodyReader)
+	lineScanner := bufio.NewScanner(bzipReader)
+
 	var line string
 	var rdrErr error
-	oneBBuf := make([]byte, 1)
+
 	lines := []string{}
 	linesRead := 0
 	savedLines := 0
 
 	fmt.Println("Starting download")
 
-	for {
-		_, rdrErr = reader.Read(oneBBuf)
-		if rdrErr != nil {
-			fmt.Println(rdrErr)
-			break
-		}
-		switch {
-		case '0' <= oneBBuf[0] && oneBBuf[0] <= '9':
-			line = line + string(oneBBuf[0])
-		case oneBBuf[0] == '\n':
-			if line != "" {
-				lines = append(lines, line)
-				line = ""
-				savedLines++
-			}
-			linesRead++
-		}
+	for lineScanner.Scan() {
+		line = strings.Replace(strings.ReplaceAll(lineScanner.Text(), " ", ""), ",", "", 1)
+		lines = append(lines, line)
+		savedLines++
+		linesRead++
+
 		if savedLines >= 1000 {
 			saveToDB(db, lines)
 			savedLines = 0
-			lines = []string{}
+			lines = lines[:0]
 			if terminal.IsTerminal(int(os.Stdout.Fd())) {
 				fmt.Printf("\rDownloading update: %d records processed", linesRead)
 			}
@@ -284,6 +277,7 @@ func downloadUpdate(from string, db *bolt.DB) (bool, error) {
 	}
 	if len(lines) > 0 {
 		err := saveToDB(db, lines)
+		lines = nil
 		if err != nil {
 			fmt.Println(err)
 			return false, err
